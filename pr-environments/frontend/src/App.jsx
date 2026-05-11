@@ -13,6 +13,11 @@ export default function App() {
   const [form, setForm] = useState(EMPTY_FORM)
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState(null)
+  const [dark, setDark] = useState(false)
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', dark)
+  }, [dark])
 
   async function loadTrains() {
     setLoading(true)
@@ -61,7 +66,12 @@ export default function App() {
     <>
       <header>
         <h1>Trains</h1>
-        <button className="btn-primary" onClick={openModal}>+ Add Train</button>
+        <div className="header-actions">
+          <button className="btn-toggle" onClick={() => setDark(d => !d)} title="Toggle dark mode">
+            {dark ? '☀️' : '🌙'}
+          </button>
+          <button className="btn-primary" onClick={openModal}>+ Add Train</button>
+        </div>
       </header>
 
       <main>
