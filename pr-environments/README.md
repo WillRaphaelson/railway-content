@@ -55,7 +55,7 @@ Add a service pointing to the `backend/` directory (or set the root directory in
 
 - **Start command:** `uvicorn main:app --host 0.0.0.0 --port $PORT`
 - **Variable:** `DATABASE_URL=${{Postgres.DATABASE_URL}}`
-- **Networking:** Generate a public domain and note the URL.
+- **Networking:** Generate a public domain.
 
 ### 4. Deploy the frontend service
 
@@ -63,10 +63,10 @@ Add a second service pointing to the `frontend/` directory. Configure it:
 
 - **Build command:** `npm run build`
 - **Start command:** `npm start`
-- **Variable:** `VITE_BACKEND_URL=https://<your-backend-domain>`
+- **Variable:** `VITE_BACKEND_URL=https://${{backend.RAILWAY_PUBLIC_DOMAIN}}`
 - **Networking:** Generate a public domain to access the UI.
 
-> Vite bakes `VITE_BACKEND_URL` into the build at deploy time, so each PR environment automatically points to its own backend.
+Railway resolves the reference variable to the backend service's public domain at build time — including in PR environments, where each PR's frontend automatically gets that PR's backend URL.
 
 ### 5. Enable PR environments
 
@@ -102,7 +102,7 @@ cd backend
 railway up --service backend
 railway variables set DATABASE_URL='${{Postgres.DATABASE_URL}}' --service backend
 railway service update --start-command "uvicorn main:app --host 0.0.0.0 --port \$PORT" --service backend
-railway domain --service backend   # note the generated URL
+railway domain --service backend
 ```
 
 ### 5. Deploy the frontend
@@ -110,7 +110,7 @@ railway domain --service backend   # note the generated URL
 ```bash
 cd ../frontend
 railway up --service frontend
-railway variables set VITE_BACKEND_URL='https://<backend-domain>' --service frontend
+railway variables set VITE_BACKEND_URL='${{backend.RAILWAY_PUBLIC_DOMAIN}}' --service frontend
 railway service update --build-command "npm run build" --start-command "npm start" --service frontend
 railway domain --service frontend
 ```
