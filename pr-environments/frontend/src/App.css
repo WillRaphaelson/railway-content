@@ -82,7 +82,7 @@ tr:last-child td { border-bottom: none; }
 .field { margin-bottom: 1rem; }
 label { display: block; font-size: 0.8rem; font-weight: 500; color: #555; margin-bottom: 0.3rem; }
 .req { color: #e94560; }
-input[type=text], input:not([type]) {
+input[type=text], input[type=number], input:not([type]) {
   width: 100%;
   padding: 0.5rem 0.75rem;
   border: 1px solid #ddd;

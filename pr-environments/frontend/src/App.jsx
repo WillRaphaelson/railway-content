@@ -3,7 +3,7 @@ import './App.css'
 
 const API = (import.meta.env.VITE_BACKEND_URL || '').replace(/\/$/, '')
 
-const EMPTY_FORM = { name: '', route: '', description: '', color: '' }
+const EMPTY_FORM = { name: '', route: '', description: '', color: '', top_speed: '' }
 
 export default function App() {
   const [trains, setTrains] = useState([])
@@ -39,7 +39,8 @@ export default function App() {
     setSubmitError(null)
     const body = { name: form.name, route: form.route }
     if (form.description) body.description = form.description
-    if (form.color) body.color = form.color
+    if (form.color)     body.color     = form.color
+    if (form.top_speed) body.top_speed = parseInt(form.top_speed, 10)
     try {
       const res = await fetch(`${API}/trains`, {
         method: 'POST',
@@ -77,6 +78,7 @@ export default function App() {
                 <th>Route</th>
                 <th>Description</th>
                 <th>Color</th>
+                <th>Top Speed</th>
               </tr>
             </thead>
             <tbody>
@@ -90,6 +92,7 @@ export default function App() {
                       ? <><span className="swatch" style={{ background: t.color }} />{t.color}</>
                       : '—'}
                   </td>
+                  <td>{t.top_speed != null ? `${t.top_speed} mph` : '—'}</td>
                 </tr>
               ))}
             </tbody>
@@ -113,6 +116,9 @@ export default function App() {
               </Field>
               <Field label="Color">
                 <input value={form.color} onChange={e => setForm(f => ({ ...f, color: e.target.value }))} placeholder="#cc0000" />
+              </Field>
+              <Field label="Top Speed (mph)">
+                <input type="number" value={form.top_speed} onChange={e => setForm(f => ({ ...f, top_speed: e.target.value }))} placeholder="150" min="0" />
               </Field>
               {submitError && <p className="submit-error">{submitError}</p>}
               <div className="modal-actions">
