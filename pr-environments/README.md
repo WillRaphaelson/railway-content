@@ -1,15 +1,26 @@
 # pr-environments
 
-A minimal FastAPI + Postgres API demonstrating Railway PR environments. Each pull request gets its own isolated deployment with its own database.
+A FastAPI + Postgres API with a vanilla JS frontend demonstrating Railway PR environments. Each pull request gets its own isolated deployment with its own database.
 
-## Files
+## Structure
 
 ```
 pr-environments/
-├── main.py           # FastAPI app with /trains endpoints
-├── requirements.txt  # Python dependencies
+├── backend/
+│   ├── main.py           # FastAPI app with /trains endpoints
+│   └── requirements.txt  # Python dependencies
+├── frontend/
+│   ├── src/
+│   │   ├── App.jsx       # Train list + add modal
+│   │   ├── App.css
+│   │   └── main.jsx
+│   ├── index.html
+│   ├── package.json
+│   └── vite.config.js
 └── .gitignore
 ```
+
+The database is seeded with three example trains on first startup.
 
 ## API
 
@@ -30,7 +41,7 @@ pr-environments/
 
 ## Deploy on Railway (UI)
 
-### 1. Create a new project in the Railway dashboard
+### 1. Create a new project
 
 Go to [railway.com](https://railway.com), create a new project, and connect your GitHub repo.
 
@@ -38,33 +49,30 @@ Go to [railway.com](https://railway.com), create a new project, and connect your
 
 In the project, click **Add Service → Database → PostgreSQL**.
 
-### 3. Add the DATABASE_URL variable
+### 3. Deploy the backend service
 
-In your app service's **Variables** tab, add:
+Add a service pointing to the `backend/` directory (or set the root directory in service settings). Configure it:
 
-```
-DATABASE_URL=${{Postgres.DATABASE_URL}}
-```
+- **Start command:** `uvicorn main:app --host 0.0.0.0 --port $PORT`
+- **Variable:** `DATABASE_URL=${{Postgres.DATABASE_URL}}`
+- **Networking:** Generate a public domain and note the URL.
 
-This uses Railway's reference syntax to pull the connection string from the Postgres service.
+### 4. Deploy the frontend service
 
-### 4. Configure the start command
+Add a second service pointing to the `frontend/` directory. Configure it:
 
-In your service settings, set the start command:
+- **Build command:** `npm run build`
+- **Start command:** `npm start`
+- **Variable:** `VITE_BACKEND_URL=https://<your-backend-domain>`
+- **Networking:** Generate a public domain to access the UI.
 
-```
-uvicorn main:app --host 0.0.0.0 --port $PORT
-```
+> Vite bakes `VITE_BACKEND_URL` into the build at deploy time, so each PR environment automatically points to its own backend.
 
-Railway auto-detects Python and installs from `requirements.txt` on each deploy.
+### 5. Enable PR environments
 
-### 5. Add a public domain
+In your Railway project settings, go to **Environments → Enable PR Environments**. Every pull request then gets its own isolated deployment with its own Postgres instance, torn down automatically when the PR closes.
 
-In your app service, go to the **Settings** tab and click **Generate Domain** under the Networking section. Railway will assign a public URL for your service.
-
-### 6. Enable PR environments
-
-In your Railway project settings, go to **Environments → Enable PR Environments**. From then on, every pull request gets its own isolated deployment with its own Postgres instance, and Railway tears it down automatically when the PR closes.
+---
 
 ## Deploy on Railway (CLI)
 
@@ -77,8 +85,6 @@ railway login
 
 ### 2. Initialize the project
 
-From the `pr-environments` directory, link to a new or existing Railway project:
-
 ```bash
 railway init
 ```
@@ -89,45 +95,48 @@ railway init
 railway add --database postgres
 ```
 
-### 4. Add the DATABASE_URL variable
+### 4. Deploy the backend
 
 ```bash
-railway variables set DATABASE_URL='${{Postgres.DATABASE_URL}}'
+cd backend
+railway up --service backend
+railway variables set DATABASE_URL='${{Postgres.DATABASE_URL}}' --service backend
+railway service update --start-command "uvicorn main:app --host 0.0.0.0 --port \$PORT" --service backend
+railway domain --service backend   # note the generated URL
 ```
 
-This uses Railway's reference syntax to pull the connection string from the Postgres service.
-
-### 5. Set the start command
+### 5. Deploy the frontend
 
 ```bash
-railway service update --start-command "uvicorn main:app --host 0.0.0.0 --port \$PORT"
+cd ../frontend
+railway up --service frontend
+railway variables set VITE_BACKEND_URL='https://<backend-domain>' --service frontend
+railway service update --build-command "npm run build" --start-command "npm start" --service frontend
+railway domain --service frontend
 ```
 
-### 6. Deploy
+### 6. Enable PR environments
 
-```bash
-railway up
-```
+PR environments must be enabled in the Railway dashboard: go to your project settings, then **Environments → Enable PR Environments**.
 
-### 7. Add a public domain
-
-```bash
-railway domain
-```
-
-Railway will generate and print a public URL for your service.
-
-### 8. Enable PR environments
-
-PR environments must be enabled in the Railway dashboard: go to your project settings, then **Environments → Enable PR Environments**. From then on, every pull request gets its own isolated deployment with its own Postgres instance, and Railway tears it down automatically when the PR closes.
+---
 
 ## Local development
 
+### Backend
+
 ```bash
-# install deps (using uv)
+cd backend
 uv venv && source .venv/bin/activate
 uv pip install -r requirements.txt
-
-# start (requires a local DATABASE_URL)
 DATABASE_URL=postgresql://... uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+### Frontend
+
+```bash
+cd frontend
+npm install
+VITE_BACKEND_URL=http://localhost:8000 npm run dev
+# open http://localhost:5173
 ```
