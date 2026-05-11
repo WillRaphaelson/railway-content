@@ -6,4 +6,4 @@ Examples and reference projects for deploying on [Railway](https://railway.com).
 
 | Directory | Description |
 |-----------|-------------|
-| [pr-environments](./pr-environments) | FastAPI + Postgres API with PR environment setup |
+| [pr-environments](./pr-environments) | Full-stack React + FastAPI + Postgres app with PR environment setup |
