@@ -42,17 +42,14 @@ async def run_pipeline(issue_number, full_name):
     work_dir = tempfile.mkdtemp(prefix=f"claude-{issue_number}-")
     try:
         prompt = build_prompt(issue_number, full_name)
-        prompt_file = os.path.join(work_dir, ".claude-prompt.txt")
-        with open(prompt_file, "w") as f:
-            f.write(prompt)
-
         log.info(f"issue #{issue_number}: prompt:\n{prompt}")
         log.info(f"issue #{issue_number}: handing off to claude in {work_dir}")
         subprocess.run(
-            'claude --print --dangerously-skip-permissions '
-            '--allowedTools "Bash,Read,Edit,Write" '
-            '-p "$(cat .claude-prompt.txt)"',
-            shell=True,
+            [
+                "claude", "--print", "--dangerously-skip-permissions",
+                "--allowedTools", "Bash,Read,Edit,Write",
+                "-p", prompt,
+            ],
             cwd=work_dir,
             env={**os.environ, "GH_TOKEN": os.environ["GITHUB_TOKEN"]},
             check=True,
