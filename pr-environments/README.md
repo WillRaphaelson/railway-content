@@ -35,9 +35,12 @@ The database is seeded with three example trains on first startup.
   "name": "string",
   "route": "string",
   "description": "string (optional)",
-  "color": "string (optional)"
+  "color": "string (optional)",
+  "top_speed": "integer (optional, mph)"
 }
 ```
+
+The frontend renders the train list with a dark-mode toggle in the header.
 
 ## Deploy on Railway (UI)
 

@@ -46,7 +46,7 @@ The runner needs a token with write access to the target repo. A fine-grained pe
 1. Go to [github.com/settings/personal-access-tokens](https://github.com/settings/personal-access-tokens) → **Generate new token**.
 2. **Resource owner:** the user or org that owns the target repo.
 3. **Repository access:** **Only select repositories** → pick the repo the runner should work on.
-4. **Repository permissions:** set the following to **Read and write**:
+4. **Repository permissions:** set all three of the following to **Read and write** (not just Read — a Contents: Read-only token authenticates but 403s on `git push`):
    - **Contents** (clone and push branches)
    - **Pull requests** (open PRs)
    - **Issues** (post comments)
@@ -160,5 +160,12 @@ To test the webhook against your local server, expose it with a tunnel (e.g. `ng
 ## Security notes
 
 - The runner verifies every webhook with HMAC-SHA256 before doing any work, so the endpoint is safe to expose publicly.
+- The container runs as a non-root `appuser` (uid 1000), not as root.
 - Claude Code runs with `--dangerously-skip-permissions` inside the container. The blast radius is the tempdir clone of the repo — the container has no persistent volume — but the `GITHUB_TOKEN` it uses is real. Scope the token to only the repos you want the runner to touch.
 - Anyone who can open an issue on a repo with the webhook installed can trigger a run. For public repos this means anyone on GitHub — restrict accordingly, or filter the webhook payload to a set of allowed authors before running the pipeline.
+
+## Troubleshooting
+
+- **`git push` returns 403 "Permission denied"** — the `GITHUB_TOKEN` is missing `Contents: Read and write` on the target repo, or the repo isn't in the fine-grained PAT's "Selected repositories" list. Verify with `curl -s -H "Authorization: Bearer $GITHUB_TOKEN" https://api.github.com/repos/<owner>/<repo> | jq '.permissions'` — `push` must be `true`.
+- **`gh pr create` fails** — needs `Pull requests: Read and write`.
+- **`gh issue comment` fails** — needs `Issues: Read and write`.
