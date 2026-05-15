@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { BrowserRouter, Routes, Route, Link, useParams, useNavigate } from 'react-router-dom'
 import './App.css'
 
 const API = (import.meta.env.VITE_BACKEND_URL || '').replace(/\/$/, '')
@@ -6,6 +7,31 @@ const API = (import.meta.env.VITE_BACKEND_URL || '').replace(/\/$/, '')
 const EMPTY_FORM = { name: '', route: '', description: '', color: '', top_speed: '' }
 
 export default function App() {
+  const [dark, setDark] = useState(false)
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', dark)
+  }, [dark])
+
+  return (
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<TrainList dark={dark} setDark={setDark} />} />
+        <Route path="/trains/:id" element={<TrainDetail dark={dark} setDark={setDark} />} />
+      </Routes>
+    </BrowserRouter>
+  )
+}
+
+function ThemeToggle({ dark, setDark }) {
+  return (
+    <button className="btn-toggle" onClick={() => setDark(d => !d)} title="Toggle dark mode">
+      {dark ? '☀️' : '🌙'}
+    </button>
+  )
+}
+
+function TrainList({ dark, setDark }) {
   const [trains, setTrains] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -13,11 +39,6 @@ export default function App() {
   const [form, setForm] = useState(EMPTY_FORM)
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState(null)
-  const [dark, setDark] = useState(false)
-
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', dark)
-  }, [dark])
 
   async function loadTrains() {
     setLoading(true)
@@ -67,9 +88,7 @@ export default function App() {
       <header>
         <h1>Trains</h1>
         <div className="header-actions">
-          <button className="btn-toggle" onClick={() => setDark(d => !d)} title="Toggle dark mode">
-            {dark ? '☀️' : '🌙'}
-          </button>
+          <ThemeToggle dark={dark} setDark={setDark} />
           <button className="btn-primary" onClick={openModal}>+ Add Train</button>
         </div>
       </header>
@@ -94,7 +113,7 @@ export default function App() {
             <tbody>
               {trains.map(t => (
                 <tr key={t.id}>
-                  <td>{t.name}</td>
+                  <td><Link to={`/trains/${t.id}`} className="train-link">{t.name}</Link></td>
                   <td>{t.route}</td>
                   <td>{t.description || '—'}</td>
                   <td>
@@ -141,6 +160,81 @@ export default function App() {
           </div>
         </div>
       )}
+    </>
+  )
+}
+
+function TrainDetail({ dark, setDark }) {
+  const { id } = useParams()
+  const navigate = useNavigate()
+  const [train, setTrain] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    async function load() {
+      setLoading(true)
+      setError(null)
+      try {
+        const res = await fetch(`${API}/trains/${id}`)
+        if (res.status === 404) throw new Error('Train not found')
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        const data = await res.json()
+        if (!cancelled) setTrain(data)
+      } catch (e) {
+        if (!cancelled) setError(e.message)
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+    load()
+    return () => { cancelled = true }
+  }, [id])
+
+  return (
+    <>
+      <header>
+        <h1>
+          <button className="btn-back" onClick={() => navigate('/')} title="Back to trains">←</button>
+          {train ? train.name : 'Train'}
+        </h1>
+        <div className="header-actions">
+          <ThemeToggle dark={dark} setDark={setDark} />
+        </div>
+      </header>
+
+      <main>
+        {loading && <p className="status">Loading…</p>}
+        {error && <p className="status error">{error}</p>}
+        {!loading && !error && train && (
+          <div className="detail-card">
+            {train.color && (
+              <div className="detail-color-bar" style={{ background: train.color }} />
+            )}
+            <dl className="detail-list">
+              <dt>Name</dt>
+              <dd>{train.name}</dd>
+
+              <dt>Route</dt>
+              <dd>{train.route}</dd>
+
+              <dt>Description</dt>
+              <dd>{train.description || '—'}</dd>
+
+              <dt>Color</dt>
+              <dd>
+                {train.color
+                  ? <><span className="swatch" style={{ background: train.color }} />{train.color}</>
+                  : '—'}
+              </dd>
+
+              <dt>Top Speed</dt>
+              <dd>{train.top_speed != null ? `${train.top_speed} mph` : '—'}</dd>
+            </dl>
+          </div>
+        )}
+      </main>
     </>
   )
 }

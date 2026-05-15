@@ -11,7 +11,7 @@ pr-environments/
 │   └── requirements.txt  # Python dependencies
 ├── frontend/
 │   ├── src/
-│   │   ├── App.jsx       # Train list + add modal
+│   │   ├── App.jsx       # Router + train list / detail pages
 │   │   ├── App.css
 │   │   └── main.jsx
 │   ├── index.html
@@ -27,6 +27,7 @@ The database is seeded with three example trains on first startup.
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/trains` | List all trains |
+| `GET` | `/trains/{id}` | Get a single train by id (404 if not found) |
 | `POST` | `/trains` | Create a train |
 
 **POST body:**

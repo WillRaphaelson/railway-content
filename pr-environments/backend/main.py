@@ -1,6 +1,6 @@
 import os
 import psycopg2
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 
 DATABASE_URL = os.environ["DATABASE_URL"]
@@ -60,6 +60,21 @@ def list_trains():
     cur.close()
     conn.close()
     return rows
+
+@app.get("/trains/{train_id}")
+def get_train(train_id: int):
+    conn = get_conn()
+    cur = conn.cursor()
+    cur.execute(
+        "SELECT id, name, description, color, route, top_speed FROM trains WHERE id = %s",
+        (train_id,),
+    )
+    row = cur.fetchone()
+    cur.close()
+    conn.close()
+    if row is None:
+        raise HTTPException(status_code=404, detail="Train not found")
+    return {"id": row[0], "name": row[1], "description": row[2], "color": row[3], "route": row[4], "top_speed": row[5]}
 
 @app.post("/trains")
 async def create_train(request: Request):

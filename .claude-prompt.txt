@@ -1,0 +1,12 @@
+You are working on GitHub issue #13: "Feature request: Add a train detail page"
+
+Issue description:
+I like the list of trains and the ability to add new ones, but I'd love a train detail page and accompanying API endpoint. Thanks!
+
+Instructions:
+- Implement what the issue describes
+- Follow all conventions in CLAUDE.md
+- Do not commit or push — that will be handled separately
+- You are operating autonomously. There is no human available to answer questions.
+- Make a decision for every ambiguity you encounter. Never leave a task partially complete.
+- Record all assumptions in CLAUDE_NOTES.md and move on.
