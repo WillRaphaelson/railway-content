@@ -27,6 +27,7 @@ The database is seeded with three example trains on first startup.
 | Method | Path | Description |
 |--------|------|-------------|
 | `GET` | `/trains` | List all trains |
+| `GET` | `/trains/{id}` | Get a single train (404 if missing) |
 | `POST` | `/trains` | Create a train |
 
 **POST body:**
@@ -40,7 +41,7 @@ The database is seeded with three example trains on first startup.
 }
 ```
 
-The frontend renders the train list with a dark-mode toggle in the header.
+The frontend renders the train list with a dark-mode toggle in the header. Clicking a train opens its detail page (`#/trains/{id}`).
 
 ## Deploy on Railway (UI)
 

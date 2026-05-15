@@ -5,7 +5,56 @@ const API = (import.meta.env.VITE_BACKEND_URL || '').replace(/\/$/, '')
 
 const EMPTY_FORM = { name: '', route: '', description: '', color: '', top_speed: '' }
 
+function parseRoute(hash) {
+  const m = hash.match(/^#\/trains\/(\d+)$/)
+  if (m) return { name: 'detail', id: parseInt(m[1], 10) }
+  return { name: 'list' }
+}
+
+function useHashRoute() {
+  const [route, setRoute] = useState(() => parseRoute(window.location.hash))
+  useEffect(() => {
+    const onHash = () => setRoute(parseRoute(window.location.hash))
+    window.addEventListener('hashchange', onHash)
+    return () => window.removeEventListener('hashchange', onHash)
+  }, [])
+  return route
+}
+
+function navigate(hash) {
+  window.location.hash = hash
+}
+
 export default function App() {
+  const route = useHashRoute()
+  const [dark, setDark] = useState(false)
+
+  useEffect(() => {
+    document.documentElement.classList.toggle('dark', dark)
+  }, [dark])
+
+  return (
+    <>
+      <header>
+        <h1>
+          <a href="#/" className="title-link">Trains</a>
+        </h1>
+        <div className="header-actions">
+          <button className="btn-toggle" onClick={() => setDark(d => !d)} title="Toggle dark mode">
+            {dark ? '☀️' : '🌙'}
+          </button>
+        </div>
+      </header>
+
+      <main>
+        {route.name === 'list' && <TrainList />}
+        {route.name === 'detail' && <TrainDetail id={route.id} />}
+      </main>
+    </>
+  )
+}
+
+function TrainList() {
   const [trains, setTrains] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
@@ -13,11 +62,6 @@ export default function App() {
   const [form, setForm] = useState(EMPTY_FORM)
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState(null)
-  const [dark, setDark] = useState(false)
-
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', dark)
-  }, [dark])
 
   async function loadTrains() {
     setLoading(true)
@@ -64,51 +108,43 @@ export default function App() {
 
   return (
     <>
-      <header>
-        <h1>Trains</h1>
-        <div className="header-actions">
-          <button className="btn-toggle" onClick={() => setDark(d => !d)} title="Toggle dark mode">
-            {dark ? '☀️' : '🌙'}
-          </button>
-          <button className="btn-primary" onClick={openModal}>+ Add Train</button>
-        </div>
-      </header>
+      <div className="list-toolbar">
+        <button className="btn-primary" onClick={openModal}>+ Add Train</button>
+      </div>
 
-      <main>
-        {loading && <p className="status">Loading…</p>}
-        {error && <p className="status error">Failed to load trains: {error}</p>}
-        {!loading && !error && trains.length === 0 && (
-          <p className="status">No trains yet — add one!</p>
-        )}
-        {!loading && trains.length > 0 && (
-          <table>
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Route</th>
-                <th>Description</th>
-                <th>Color</th>
-                <th>Top Speed</th>
+      {loading && <p className="status">Loading…</p>}
+      {error && <p className="status error">Failed to load trains: {error}</p>}
+      {!loading && !error && trains.length === 0 && (
+        <p className="status">No trains yet — add one!</p>
+      )}
+      {!loading && trains.length > 0 && (
+        <table>
+          <thead>
+            <tr>
+              <th>Name</th>
+              <th>Route</th>
+              <th>Description</th>
+              <th>Color</th>
+              <th>Top Speed</th>
+            </tr>
+          </thead>
+          <tbody>
+            {trains.map(t => (
+              <tr key={t.id} className="train-row" onClick={() => navigate(`#/trains/${t.id}`)}>
+                <td><a href={`#/trains/${t.id}`} onClick={e => e.stopPropagation()}>{t.name}</a></td>
+                <td>{t.route}</td>
+                <td>{t.description || '—'}</td>
+                <td>
+                  {t.color
+                    ? <><span className="swatch" style={{ background: t.color }} />{t.color}</>
+                    : '—'}
+                </td>
+                <td>{t.top_speed != null ? `${t.top_speed} mph` : '—'}</td>
               </tr>
-            </thead>
-            <tbody>
-              {trains.map(t => (
-                <tr key={t.id}>
-                  <td>{t.name}</td>
-                  <td>{t.route}</td>
-                  <td>{t.description || '—'}</td>
-                  <td>
-                    {t.color
-                      ? <><span className="swatch" style={{ background: t.color }} />{t.color}</>
-                      : '—'}
-                  </td>
-                  <td>{t.top_speed != null ? `${t.top_speed} mph` : '—'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </main>
+            ))}
+          </tbody>
+        </table>
+      )}
 
       {modalOpen && (
         <div className="overlay" onClick={e => e.target === e.currentTarget && closeModal()}>
@@ -142,6 +178,61 @@ export default function App() {
         </div>
       )}
     </>
+  )
+}
+
+function TrainDetail({ id }) {
+  const [train, setTrain] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState(null)
+
+  useEffect(() => {
+    let cancelled = false
+    setLoading(true)
+    setError(null)
+    setTrain(null)
+    fetch(`${API}/trains/${id}`)
+      .then(res => {
+        if (res.status === 404) throw new Error('Train not found')
+        if (!res.ok) throw new Error(`HTTP ${res.status}`)
+        return res.json()
+      })
+      .then(data => { if (!cancelled) setTrain(data) })
+      .catch(e => { if (!cancelled) setError(e.message) })
+      .finally(() => { if (!cancelled) setLoading(false) })
+    return () => { cancelled = true }
+  }, [id])
+
+  return (
+    <article className="detail">
+      <a href="#/" className="back-link">← Back to all trains</a>
+      {loading && <p className="status">Loading…</p>}
+      {error && <p className="status error">{error}</p>}
+      {train && (
+        <>
+          <div className="detail-header">
+            {train.color && <span className="detail-color" style={{ background: train.color }} aria-hidden="true" />}
+            <h2>{train.name}</h2>
+          </div>
+          <dl className="detail-grid">
+            <dt>Route</dt>
+            <dd>{train.route}</dd>
+            <dt>Description</dt>
+            <dd>{train.description || '—'}</dd>
+            <dt>Color</dt>
+            <dd>
+              {train.color
+                ? <><span className="swatch" style={{ background: train.color }} />{train.color}</>
+                : '—'}
+            </dd>
+            <dt>Top Speed</dt>
+            <dd>{train.top_speed != null ? `${train.top_speed} mph` : '—'}</dd>
+            <dt>ID</dt>
+            <dd>#{train.id}</dd>
+          </dl>
+        </>
+      )}
+    </article>
   )
 }
 
