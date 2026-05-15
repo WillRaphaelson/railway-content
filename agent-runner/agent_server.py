@@ -26,13 +26,14 @@ async def webhook(request: Request):
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     payload = await request.json()
-    if payload.get("action") != "opened":
-        log.info("ignoring webhook (action=%s)", payload.get("action"))
+    action = payload.get("action")
+    if action != "opened":
+        log.info(f"ignoring webhook (action={action})")
         return {"status": "ignored"}
 
     issue_number = payload["issue"]["number"]
     full_name = payload["repository"]["full_name"]
-    log.info("accepted issue #%s in %s", issue_number, full_name)
+    log.info(f"accepted issue #{issue_number} in {full_name}")
     asyncio.create_task(run_pipeline(issue_number, full_name))
     return {"status": "ok"}
 
@@ -40,11 +41,13 @@ async def webhook(request: Request):
 async def run_pipeline(issue_number, full_name):
     work_dir = tempfile.mkdtemp(prefix=f"claude-{issue_number}-")
     try:
+        prompt = build_prompt(issue_number, full_name)
         prompt_file = os.path.join(work_dir, ".claude-prompt.txt")
         with open(prompt_file, "w") as f:
-            f.write(build_prompt(issue_number, full_name))
+            f.write(prompt)
 
-        log.info("issue #%s: handing off to claude in %s", issue_number, work_dir)
+        log.info(f"issue #{issue_number}: prompt:\n{prompt}")
+        log.info(f"issue #{issue_number}: handing off to claude in {work_dir}")
         subprocess.run(
             'claude --print --dangerously-skip-permissions '
             '--allowedTools "Bash,Read,Edit,Write" '
@@ -54,9 +57,9 @@ async def run_pipeline(issue_number, full_name):
             env={**os.environ, "GH_TOKEN": os.environ["GITHUB_TOKEN"]},
             check=True,
         )
-        log.info("issue #%s: claude run complete", issue_number)
+        log.info(f"issue #{issue_number}: claude run complete")
     except Exception:
-        log.exception("issue #%s: pipeline failed", issue_number)
+        log.exception(f"issue #{issue_number}: pipeline failed")
         raise
     finally:
         shutil.rmtree(work_dir, ignore_errors=True)
