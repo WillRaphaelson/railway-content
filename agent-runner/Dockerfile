@@ -11,9 +11,14 @@ RUN curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
 
 RUN npm install -g @anthropic-ai/claude-code
 
+RUN useradd -m -u 1000 appuser
+
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install -r requirements.txt
 COPY . .
+RUN chown -R appuser:appuser /app
+
+USER appuser
 
 CMD ["uvicorn", "agent_server:app", "--host", "0.0.0.0", "--port", "3000"]
