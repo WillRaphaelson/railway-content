@@ -1,6 +1,6 @@
 # agent-runner
 
-A FastAPI webhook service that runs [Claude Code](https://docs.claude.com/en/docs/claude-code) on GitHub issues. When a new issue is opened, the service clones the repo, lets Claude implement it on a new branch, opens a PR, and comments back on the issue with the PR link.
+A FastAPI webhook service that runs [Claude Code](https://docs.claude.com/en/docs/claude-code) on GitHub issues. When a new issue is opened, the service hands off to Claude — Claude reads the issue, clones the repo, implements the change, commits, pushes, opens the PR, and comments back on the issue. The Python service is just the harness: verify webhook, spawn Claude, clean up.
 
 ## Structure
 
@@ -16,10 +16,17 @@ The Dockerfile installs `git`, the GitHub CLI (`gh`), Node.js, and the `@anthrop
 ## How it works
 
 1. GitHub sends a webhook to `/webhook` on every issue event.
-2. The handler verifies the `x-hub-signature-256` HMAC against `GITHUB_WEBHOOK_SECRET` and triggers the pipeline.
-3. The pipeline clones the repo into a tempdir, checks out `claude/issue-<number>`, and writes a prompt file built from the issue title and body.
-4. `claude --print --dangerously-skip-permissions` is invoked with `Bash,Read,Edit,Write` allowed. Claude works autonomously and records any assumptions in `CLAUDE_NOTES.md`.
-5. The runner commits, pushes, opens a PR via `gh pr create`, and posts the PR URL back as a comment on the issue.
+2. The handler verifies the `x-hub-signature-256` HMAC against `GITHUB_WEBHOOK_SECRET` and triggers the pipeline on `action=opened`.
+3. The pipeline creates an empty tempdir, writes a prompt file containing the issue number and repo full name, and invokes `claude --print --dangerously-skip-permissions` with `Bash,Read,Edit,Write` allowed. Claude inherits `GH_TOKEN` so the `gh` CLI is authenticated inside its shell.
+4. Claude does everything else end to end:
+   - `gh auth setup-git` to wire up git credentials.
+   - `gh issue view` to read the issue.
+   - `gh repo clone` into the tempdir, then `git checkout -b claude/issue-<number>`.
+   - Implement the change. Record assumptions in `CLAUDE_NOTES.md`.
+   - Commit with a real message derived from the diff, push the branch.
+   - `gh pr create` with a title and body Claude writes itself.
+   - `gh issue comment` linking the PR.
+5. The Python harness deletes the tempdir and returns.
 
 ## Webhook endpoint
 

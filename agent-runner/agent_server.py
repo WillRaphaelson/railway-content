@@ -26,75 +26,35 @@ async def webhook(request: Request):
         raise HTTPException(status_code=401, detail="Unauthorized")
 
     payload = await request.json()
-    action = payload.get("action")
-    issue = payload.get("issue")
-    repository = payload.get("repository")
-
-    if action != "opened":
-        log.info("ignoring webhook (action=%s)", action)
+    if payload.get("action") != "opened":
+        log.info("ignoring webhook (action=%s)", payload.get("action"))
         return {"status": "ignored"}
 
-    log.info("accepted issue #%s in %s", issue["number"], repository["full_name"])
-    asyncio.create_task(run_pipeline(issue, repository))
+    issue_number = payload["issue"]["number"]
+    full_name = payload["repository"]["full_name"]
+    log.info("accepted issue #%s in %s", issue_number, full_name)
+    asyncio.create_task(run_pipeline(issue_number, full_name))
     return {"status": "ok"}
 
 
-async def run_pipeline(issue, repository):
-    issue_number = issue["number"]
-    issue_title = issue["title"]
-    issue_body = issue.get("body") or ""
-    branch = f"claude/issue-{issue_number}"
-    default_branch = repository["default_branch"]
-    full_name = repository["full_name"]
-    token = os.environ["GITHUB_TOKEN"]
-    repo_url = f"https://x-access-token:{token}@github.com/{full_name}.git"
-
+async def run_pipeline(issue_number, full_name):
     work_dir = tempfile.mkdtemp(prefix=f"claude-{issue_number}-")
-    log.info("issue #%s: cloning %s into %s", issue_number, full_name, work_dir)
-
     try:
-        run(f"git clone {repo_url} {work_dir}")
-        run(f"git checkout -b {branch}", cwd=work_dir)
-        run('git config user.email "claude-runner@railway.app"', cwd=work_dir)
-        run('git config user.name "Claude"', cwd=work_dir)
-
         prompt_file = os.path.join(work_dir, ".claude-prompt.txt")
         with open(prompt_file, "w") as f:
-            f.write(build_prompt(issue_number, issue_title, issue_body))
+            f.write(build_prompt(issue_number, full_name))
 
-        log.info("issue #%s: running claude", issue_number)
-        run(
+        log.info("issue #%s: handing off to claude in %s", issue_number, work_dir)
+        subprocess.run(
             'claude --print --dangerously-skip-permissions '
             '--allowedTools "Bash,Read,Edit,Write" '
             '-p "$(cat .claude-prompt.txt)"',
+            shell=True,
             cwd=work_dir,
+            env={**os.environ, "GH_TOKEN": os.environ["GITHUB_TOKEN"]},
+            check=True,
         )
-
-        log.info("issue #%s: pushing branch %s", issue_number, branch)
-        run("git add -A", cwd=work_dir)
-        run(f'git commit -m "feat: implement issue #{issue_number}"', cwd=work_dir)
-        run(f"git push origin {branch}", cwd=work_dir)
-
-        pr_url = run(
-            f'gh pr create '
-            f'--title "feat: {issue_title} (closes #{issue_number})" '
-            f'--body "Closes #{issue_number}" '
-            f'--base {default_branch} '
-            f'--head {branch} '
-            f'--repo {full_name}',
-            cwd=work_dir,
-            capture=True,
-        ).strip()
-        log.info("issue #%s: opened PR %s", issue_number, pr_url)
-
-        run(
-            f'gh issue comment {issue_number} '
-            f'--body "I\'ve opened a PR for this: {pr_url}" '
-            f'--repo {full_name}',
-            cwd=work_dir,
-        )
-        log.info("issue #%s: done", issue_number)
-
+        log.info("issue #%s: claude run complete", issue_number)
     except Exception:
         log.exception("issue #%s: pipeline failed", issue_number)
         raise
@@ -102,31 +62,29 @@ async def run_pipeline(issue, repository):
         shutil.rmtree(work_dir, ignore_errors=True)
 
 
-def build_prompt(issue_number, issue_title, issue_body):
+def build_prompt(issue_number, full_name):
     return f"""
-You are working on GitHub issue #{issue_number}: "{issue_title}"
+You are handling GitHub issue #{issue_number} in {full_name}.
 
-Issue description:
-{issue_body}
+You are running in an empty working directory. The `gh` CLI is authenticated via $GH_TOKEN.
 
-Instructions:
-- Implement what the issue describes
-- Follow all conventions in CLAUDE.md
-- Do not commit or push — that will be handled separately
+Do the following, end to end:
+1. Run `gh auth setup-git` so git can authenticate via gh.
+2. Run `gh issue view {issue_number} --repo {full_name}` to read the issue.
+3. Clone the repo: `gh repo clone {full_name} repo`, then work inside `repo/`.
+4. Configure git inside the repo:
+   `git config user.email "claude-runner@railway.app"`
+   `git config user.name "Claude"`
+5. Create and check out a branch named `claude/issue-{issue_number}`.
+6. Implement what the issue describes. Follow CLAUDE.md conventions if present.
+7. Commit with a clear conventional commit message derived from the actual diff.
+8. Push the branch: `git push origin claude/issue-{issue_number}`.
+9. Open a PR with `gh pr create` against the repo's default branch — write a real title and body that summarize the change. Include `Closes #{issue_number}` in the body.
+10. Comment on the issue: `gh issue comment {issue_number} --repo {full_name} --body "I've opened a PR for this: <pr-url>"`.
+
+Notes:
 - You are operating autonomously. There is no human available to answer questions.
-- Make a decision for every ambiguity you encounter. Never leave a task partially complete.
-- Record all assumptions in CLAUDE_NOTES.md and move on.
+- Make a decision for every ambiguity. Never leave a task partially complete.
+- Record assumptions in CLAUDE_NOTES.md inside the repo and move on.
+- Do not stop until the PR is open and the issue has been commented on.
 """.strip()
-
-
-def run(cmd, cwd=None, capture=False):
-    result = subprocess.run(
-        cmd,
-        shell=True,
-        cwd=cwd,
-        env={**os.environ, "GH_TOKEN": os.environ["GITHUB_TOKEN"]},
-        capture_output=capture,
-        text=True,
-        check=True,
-    )
-    return result.stdout if capture else None
