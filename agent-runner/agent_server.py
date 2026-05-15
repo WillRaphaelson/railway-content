@@ -1,12 +1,16 @@
 import asyncio
 import hashlib
 import hmac
+import logging
 import os
 import shutil
 import subprocess
 import tempfile
 
 from fastapi import FastAPI, HTTPException, Request
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+log = logging.getLogger("agent-runner")
 
 app = FastAPI()
 
@@ -28,8 +32,10 @@ async def webhook(request: Request):
     repository = payload.get("repository")
 
     if action != "labeled" or label != "claude":
+        log.info("ignoring webhook (action=%s label=%s)", action, label)
         return {"status": "ignored"}
 
+    log.info("accepted issue #%s in %s", issue["number"], repository["full_name"])
     asyncio.create_task(run_pipeline(issue, repository))
     return {"status": "ok"}
 
@@ -45,6 +51,7 @@ async def run_pipeline(issue, repository):
     repo_url = f"https://x-access-token:{token}@github.com/{full_name}.git"
 
     work_dir = tempfile.mkdtemp(prefix=f"claude-{issue_number}-")
+    log.info("issue #%s: cloning %s into %s", issue_number, full_name, work_dir)
 
     try:
         run(f"git clone {repo_url} {work_dir}")
@@ -56,6 +63,7 @@ async def run_pipeline(issue, repository):
         with open(prompt_file, "w") as f:
             f.write(build_prompt(issue_number, issue_title, issue_body))
 
+        log.info("issue #%s: running claude", issue_number)
         run(
             'claude --print --dangerously-skip-permissions '
             '--allowedTools "Bash,Read,Edit,Write" '
@@ -63,6 +71,7 @@ async def run_pipeline(issue, repository):
             cwd=work_dir,
         )
 
+        log.info("issue #%s: pushing branch %s", issue_number, branch)
         run("git add -A", cwd=work_dir)
         run(f'git commit -m "feat: implement issue #{issue_number}"', cwd=work_dir)
         run(f"git push origin {branch}", cwd=work_dir)
@@ -77,6 +86,7 @@ async def run_pipeline(issue, repository):
             cwd=work_dir,
             capture=True,
         ).strip()
+        log.info("issue #%s: opened PR %s", issue_number, pr_url)
 
         run(
             f'gh issue comment {issue_number} '
@@ -84,7 +94,11 @@ async def run_pipeline(issue, repository):
             f'--repo {full_name}',
             cwd=work_dir,
         )
+        log.info("issue #%s: done", issue_number)
 
+    except Exception:
+        log.exception("issue #%s: pipeline failed", issue_number)
+        raise
     finally:
         shutil.rmtree(work_dir, ignore_errors=True)
 
