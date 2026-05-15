@@ -27,12 +27,11 @@ async def webhook(request: Request):
 
     payload = await request.json()
     action = payload.get("action")
-    label = payload.get("label", {}).get("name")
     issue = payload.get("issue")
     repository = payload.get("repository")
 
-    if action != "labeled" or label != "claude":
-        log.info("ignoring webhook (action=%s label=%s)", action, label)
+    if action != "opened":
+        log.info("ignoring webhook (action=%s)", action)
         return {"status": "ignored"}
 
     log.info("accepted issue #%s in %s", issue["number"], repository["full_name"])
