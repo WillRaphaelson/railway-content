@@ -1,6 +1,0 @@
-[build]
-builder = "railpack"
-
-[deploy]
-startCommand = "python memory_hog.py"
-restartPolicyType = "always"
