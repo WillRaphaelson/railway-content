@@ -1,2 +1,2 @@
-# No third-party dependencies — memory_hog.py is pure stdlib.
-# This file exists so Nixpacks detects a Python project and provisions Python.
+fastapi
+uvicorn[standard]
