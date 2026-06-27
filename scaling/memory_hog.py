@@ -11,6 +11,7 @@ Configuration (all optional, set as Railway variables):
   CHUNK_MB        MiB to allocate each step          (default 50)
   INTERVAL_SEC    seconds to wait between steps       (default 2)
   MAX_MB          stop growing at this RSS, 0 = grow  (default 0, unbounded)
+  RUN_SECONDS     run for this long then exit, 0 = forever (default 180)
 """
 
 import logging
@@ -24,6 +25,7 @@ log = logging.getLogger("memory-hog")
 CHUNK_MB = int(os.environ.get("CHUNK_MB", "50"))
 INTERVAL_SEC = float(os.environ.get("INTERVAL_SEC", "2"))
 MAX_MB = int(os.environ.get("MAX_MB", "0"))
+RUN_SECONDS = float(os.environ.get("RUN_SECONDS", "180"))
 
 
 def rss_mb():
@@ -42,10 +44,16 @@ def main():
     log.info(
         f"starting: +{CHUNK_MB} MiB every {INTERVAL_SEC}s"
         + (f", capped at {MAX_MB} MiB" if MAX_MB else ", unbounded (will OOM)")
+        + (f", for {RUN_SECONDS}s" if RUN_SECONDS else ", forever")
     )
 
+    start = time.monotonic()
     blocks = []  # hold references so the memory is never reclaimed
     while True:
+        if RUN_SECONDS and time.monotonic() - start >= RUN_SECONDS:
+            log.info(f"reached run time of {RUN_SECONDS}s, exiting at {rss_mb()} MiB")
+            break
+
         if MAX_MB and rss_mb() >= MAX_MB:
             log.info(f"reached cap of {MAX_MB} MiB, holding steady at {rss_mb()} MiB")
             time.sleep(INTERVAL_SEC)
